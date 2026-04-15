@@ -141,7 +141,7 @@ install(FILES
 
 # Export targets
 install(EXPORT VixTargets
-  FILE VixTargets.cmake
+  FILE vix_errorTargets.cmake
   NAMESPACE vix::
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vix_error"
 )

@@ -1,0 +1,342 @@
+name: Error Cross Platform CI
+
+on:
+  push:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/error-cross-platform-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "test/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  pull_request:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/error-cross-platform-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "test/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUILD_JOBS: 2
+
+jobs:
+  build-and-test:
+    name: build and test (${{ matrix.os }} / ${{ matrix.compiler }} / ${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+            build_type: Debug
+
+          - os: ubuntu-24.04
+            compiler: clang
+            cc: clang
+            cxx: clang++
+            build_type: Debug
+
+          - os: ubuntu-24.04
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+            build_type: Release
+
+          - os: macos-14
+            compiler: clang
+            cc: clang
+            cxx: clang++
+            build_type: Debug
+
+          - os: macos-15-intel
+            compiler: clang
+            cc: clang
+            cxx: clang++
+            build_type: Release
+
+          - os: windows-2022
+            compiler: msvc
+            build_type: Debug
+
+          - os: windows-2022
+            compiler: msvc
+            build_type: Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ninja-build \
+            clang \
+            gcc \
+            g++ \
+            pkg-config \
+            cppcheck \
+            clang-tidy \
+            valgrind
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          brew update
+          brew install ninja cppcheck llvm || true
+
+      - name: Configure environment (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "CC=${{ matrix.cc }}" >> "$GITHUB_ENV"
+          echo "CXX=${{ matrix.cxx }}" >> "$GITHUB_ENV"
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          CMAKE_ARGS=(
+            -S .
+            -B build
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+            -DVIX_ERROR_BUILD_TESTS=ON
+            -DCMAKE_INSTALL_PREFIX=$PWD/install
+          )
+
+          if [ "${{ runner.os }}" != "Windows" ]; then
+            CMAKE_ARGS+=(-G Ninja)
+          fi
+
+          cmake "${CMAKE_ARGS[@]}"
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake --build build --config ${{ matrix.build_type }} --parallel ${BUILD_JOBS}
+          else
+            cmake --build build --parallel ${BUILD_JOBS}
+          fi
+
+      - name: Run tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+          else
+            ctest --test-dir build --output-on-failure
+          fi
+
+      - name: Install
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake --install build --config ${{ matrix.build_type }}
+          else
+            cmake --install build
+          fi
+
+      - name: Verify installed package with find_package
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          mkdir -p smoke
+          cat > smoke/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.20)
+          project(error_smoke LANGUAGES CXX)
+
+          set(CMAKE_CXX_STANDARD 20)
+          set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+          find_package(vix_error CONFIG REQUIRED)
+
+          add_executable(error_smoke main.cpp)
+          target_link_libraries(error_smoke PRIVATE vix::error)
+          EOF
+
+          cat > smoke/main.cpp <<'EOF'
+          #include <iostream>
+
+          int main()
+          {
+            std::cout << "vix::error package found\n";
+            return 0;
+          }
+          EOF
+
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake -S smoke -B smoke/build \
+              -DCMAKE_PREFIX_PATH="$PWD/install"
+            cmake --build smoke/build --config ${{ matrix.build_type }}
+          else
+            cmake -S smoke -B smoke/build \
+              -G Ninja \
+              -DCMAKE_PREFIX_PATH="$PWD/install"
+            cmake --build smoke/build
+          fi
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-logs-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}
+          path: |
+            build/CMakeCache.txt
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            build/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: warn
+
+  static-analysis-linux:
+    name: static analysis (linux)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ninja-build \
+            clang \
+            cppcheck \
+            clang-tidy
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export CC=clang
+          export CXX=clang++
+
+          cmake -S . -B build-analyze -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DVIX_ERROR_BUILD_TESTS=ON
+
+      - name: Run clang-tidy
+        shell: bash
+        run: |
+          set +e
+          find src test -name '*.cpp' -print0 2>/dev/null | xargs -0 -r -n1 -P2 clang-tidy -p build-analyze
+          exit 0
+
+      - name: Run cppcheck
+        shell: bash
+        run: |
+          set +e
+          cppcheck \
+            --enable=all \
+            --std=c++20 \
+            --inconclusive \
+            --quiet \
+            --suppress=missingIncludeSystem \
+            include/ src/ test/
+          exit 0
+
+  valgrind-linux:
+    name: valgrind (linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ninja-build \
+            valgrind
+
+      - name: Configure
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S . -B build-valgrind -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DVIX_ERROR_BUILD_TESTS=ON
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --build build-valgrind --parallel ${BUILD_JOBS}
+
+      - name: Run valgrind on test executable
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -x build-valgrind/test/vix_error_test
+          valgrind \
+            --leak-check=full \
+            --show-leak-kinds=all \
+            --track-origins=yes \
+            build-valgrind/test/vix_error_test
+
+  summary:
+    name: error cross platform summary
+    needs:
+      - build-and-test
+      - static-analysis-linux
+      - valgrind-linux
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Print summary
+        shell: bash
+        run: |
+          echo "Error cross-platform CI completed."
+          echo "- Linux build and test"
+          echo "- macOS build and test"
+          echo "- Windows build and test"
+          echo "- install verification"
+          echo "- find_package(vix_error) smoke test"
+          echo "- clang-tidy"
+          echo "- cppcheck"
+          echo "- valgrind"
