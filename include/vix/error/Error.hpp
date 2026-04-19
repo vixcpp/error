@@ -105,6 +105,8 @@ namespace vix::error
 
     /**
      * @brief Get the error code.
+     *
+     * @return The stored ErrorCode.
      */
     [[nodiscard]] constexpr ErrorCode code() const noexcept
     {
@@ -113,6 +115,8 @@ namespace vix::error
 
     /**
      * @brief Get the error category.
+     *
+     * @return The stored ErrorCategory.
      */
     [[nodiscard]] constexpr ErrorCategory category() const noexcept
     {
@@ -120,7 +124,9 @@ namespace vix::error
     }
 
     /**
-     * @brief Get the human-readable error message as a string view.
+     * @brief Get the human-readable error message.
+     *
+     * @return A string view over the stored message.
      */
     [[nodiscard]] std::string_view message() const noexcept
     {
@@ -130,7 +136,10 @@ namespace vix::error
     /**
      * @brief Get the human-readable error message as a C string.
      *
-     * This is useful for interoperability with APIs such as std::exception::what().
+     * This is useful for interoperability with APIs such as
+     * std::exception::what().
+     *
+     * @return Pointer to a null-terminated message string.
      */
     [[nodiscard]] const char *message_c_str() const noexcept
     {
@@ -139,6 +148,8 @@ namespace vix::error
 
     /**
      * @brief Returns true if this object represents success.
+     *
+     * @return true if code() == ErrorCode::Ok, false otherwise.
      */
     [[nodiscard]] constexpr bool ok() const noexcept
     {
@@ -147,6 +158,8 @@ namespace vix::error
 
     /**
      * @brief Returns true if this object represents a failure.
+     *
+     * @return true if this object contains an error, false otherwise.
      */
     [[nodiscard]] constexpr bool has_error() const noexcept
     {
@@ -165,6 +178,8 @@ namespace vix::error
      *   // handle error
      * }
      * @endcode
+     *
+     * @return true if this object represents a failure.
      */
     [[nodiscard]] explicit constexpr operator bool() const noexcept
     {
@@ -172,7 +187,10 @@ namespace vix::error
     }
 
     /**
-     * @brief Compare two Error objects.
+     * @brief Compare two Error objects for equality.
+     *
+     * @param other Error to compare with.
+     * @return true if code, category, and message are equal.
      */
     [[nodiscard]] bool operator==(const Error &other) const noexcept
     {
@@ -182,7 +200,10 @@ namespace vix::error
     }
 
     /**
-     * @brief Compare two Error objects.
+     * @brief Compare two Error objects for inequality.
+     *
+     * @param other Error to compare with.
+     * @return true if the two errors differ.
      */
     [[nodiscard]] bool operator!=(const Error &other) const noexcept
     {

@@ -89,7 +89,7 @@ namespace vix::error
     /**
      * @brief Return the exception message.
      */
-    [[nodiscard]] const char *what() const noexcept override
+    const char *what() const noexcept override
     {
       return error_.message_c_str();
     }

@@ -30,13 +30,18 @@ namespace vix::error
    * @brief Represents either a success value of type T or an Error.
    *
    * Result<T> is the preferred explicit error-handling abstraction in Vix.
-   * It avoids forcing exceptions while keeping APIs clear and expressive.
+   * It allows APIs to return either:
+   * - a success value of type T
+   * - a failure represented by vix::error::Error
    *
-   * A Result<T> contains exactly one of:
-   * - a value of type T
-   * - an Error describing the failure
+   * This avoids forcing exception-based control flow while keeping APIs
+   * clear, explicit, and easy to compose.
    *
-   * Beginner-friendly usage:
+   * A Result<T> always contains exactly one of:
+   * - a value
+   * - an error
+   *
+   * Typical usage:
    * @code
    * Result<int> divide(int a, int b)
    * {
@@ -45,19 +50,24 @@ namespace vix::error
    *     return Error(
    *       ErrorCode::InvalidArgument,
    *       ErrorCategory::validation(),
-   *       "division by zero");
+   *       "division by zero"
+   *     );
    *   }
    *
    *   return a / b;
    * }
    * @endcode
    *
-   * Expert-friendly usage:
-   * - Compose operations with `and_then`
-   * - Transform values with `map`
-   * - Avoid exceptions in performance-critical paths
+   * Composition example:
+   * @code
+   * auto result = divide(10, 2)
+   *   .map([](int x)
+   *   {
+   *     return x * 2;
+   *   });
+   * @endcode
    *
-   * @tparam T Success value type.
+   * @tparam T Type of the success value.
    */
   template <typename T>
   class Result
@@ -70,14 +80,20 @@ namespace vix::error
                   "Result<void> requires specialization.");
 
   public:
-    /// @brief Type of the success value.
+    /**
+     * @brief Success value type.
+     */
     using value_type = T;
 
-    /// @brief Type of the error.
+    /**
+     * @brief Error type.
+     */
     using error_type = Error;
 
     /**
-     * @brief Construct a successful result.
+     * @brief Construct a successful result from a const value.
+     *
+     * @param value Success value to store.
      */
     Result(const T &value)
         : storage_(value)
@@ -85,7 +101,9 @@ namespace vix::error
     }
 
     /**
-     * @brief Construct a successful result (move).
+     * @brief Construct a successful result from an rvalue.
+     *
+     * @param value Success value to move into the result.
      */
     Result(T &&value)
         : storage_(std::move(value))
@@ -93,9 +111,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Construct a failed result.
+     * @brief Construct a failed result from a const Error.
      *
-     * @throws std::invalid_argument if error represents success.
+     * @param error Error to store.
+     *
+     * @throws std::invalid_argument if the provided Error represents success.
      */
     Result(const Error &error)
         : storage_(validate_error(error))
@@ -103,9 +123,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Construct a failed result (move).
+     * @brief Construct a failed result from an rvalue Error.
      *
-     * @throws std::invalid_argument if error represents success.
+     * @param error Error to move into the result.
+     *
+     * @throws std::invalid_argument if the provided Error represents success.
      */
     Result(Error &&error)
         : storage_(validate_error(std::move(error)))
@@ -113,7 +135,9 @@ namespace vix::error
     }
 
     /**
-     * @brief Returns true if the result contains a value.
+     * @brief Returns true if the result contains a success value.
+     *
+     * @return true if a value is stored, false otherwise.
      */
     [[nodiscard]] bool ok() const noexcept
     {
@@ -122,6 +146,8 @@ namespace vix::error
 
     /**
      * @brief Returns true if the result contains an error.
+     *
+     * @return true if an error is stored, false otherwise.
      */
     [[nodiscard]] bool has_error() const noexcept
     {
@@ -129,9 +155,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Boolean conversion.
+     * @brief Boolean conversion operator.
      *
-     * True when success.
+     * Equivalent to ok().
+     *
+     * @return true if the result contains a value.
      */
     [[nodiscard]] explicit operator bool() const noexcept
     {
@@ -139,9 +167,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Access the success value.
+     * @brief Access the stored success value.
      *
-     * @warning Must be called only if ok() is true.
+     * @warning Must only be called when ok() is true.
+     *
+     * @return Reference to the stored value.
      */
     [[nodiscard]] T &value() &
     {
@@ -149,7 +179,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Access the success value (const).
+     * @brief Access the stored success value.
+     *
+     * @warning Must only be called when ok() is true.
+     *
+     * @return Const reference to the stored value.
      */
     [[nodiscard]] const T &value() const &
     {
@@ -157,7 +191,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Move the success value.
+     * @brief Move the stored success value out of the result.
+     *
+     * @warning Must only be called when ok() is true.
+     *
+     * @return Rvalue reference to the stored value.
      */
     [[nodiscard]] T &&value() &&
     {
@@ -165,9 +203,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Access the error.
+     * @brief Access the stored error.
      *
-     * @warning Must be called only if has_error() is true.
+     * @warning Must only be called when has_error() is true.
+     *
+     * @return Reference to the stored error.
      */
     [[nodiscard]] Error &error() &
     {
@@ -175,7 +215,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Access the error (const).
+     * @brief Access the stored error.
+     *
+     * @warning Must only be called when has_error() is true.
+     *
+     * @return Const reference to the stored error.
      */
     [[nodiscard]] const Error &error() const &
     {
@@ -183,7 +227,11 @@ namespace vix::error
     }
 
     /**
-     * @brief Move the error.
+     * @brief Move the stored error out of the result.
+     *
+     * @warning Must only be called when has_error() is true.
+     *
+     * @return Rvalue reference to the stored error.
      */
     [[nodiscard]] Error &&error() &&
     {
@@ -191,9 +239,17 @@ namespace vix::error
     }
 
     /**
-     * @brief Transform the success value.
+     * @brief Transform the success value while preserving error propagation.
      *
-     * Applies fn only if success.
+     * If this result contains a value, fn is applied to that value and a new
+     * Result<U> is returned.
+     *
+     * If this result contains an error, the same error is propagated.
+     *
+     * @tparam F Callable type.
+     * @param fn Transformation function applied to the stored value.
+     *
+     * @return A Result containing either the transformed value or the original error.
      */
     template <typename F>
     [[nodiscard]] auto map(F &&fn) const
@@ -210,50 +266,81 @@ namespace vix::error
     }
 
     /**
-     * @brief Chain operations returning Result.
+     * @brief Chain another operation that itself returns a Result.
      *
-     * Applies fn only if success.
+     * If this result contains a value, fn is applied to that value.
+     *
+     * If this result contains an error, the same error is propagated into the
+     * returned Result type.
+     *
+     * @tparam F Callable type.
+     * @param fn Function returning another Result-like object.
+     *
+     * @return The result produced by fn, or the propagated error.
      */
     template <typename F>
     [[nodiscard]] auto and_then(F &&fn) const
         -> decltype(fn(std::declval<T>()))
     {
+      using ReturnType = decltype(fn(std::declval<T>()));
+
       if (ok())
       {
         return fn(std::get<T>(storage_));
       }
 
-      return decltype(fn(std::declval<T>()))(std::get<Error>(storage_));
+      return ReturnType(std::get<Error>(storage_));
     }
 
   private:
     /**
-     * @brief Validate that error represents a failure.
+     * @brief Validate that an Error actually represents a failure.
+     *
+     * Result<T> cannot store a success-state Error.
+     *
+     * @param error Error to validate.
+     *
+     * @return A validated Error.
+     *
+     * @throws std::invalid_argument if error does not represent a failure.
      */
-    [[nodiscard]] static Error validate_error(const Error &error)
+    static Error validate_error(const Error &error)
     {
       if (!error.has_error())
       {
         throw std::invalid_argument(
             "Result<T> cannot contain a success Error.");
       }
+
       return error;
     }
 
     /**
-     * @brief Validate that error represents a failure (move).
+     * @brief Validate that an Error actually represents a failure.
+     *
+     * Result<T> cannot store a success-state Error.
+     *
+     * @param error Error to validate and move.
+     *
+     * @return A validated Error.
+     *
+     * @throws std::invalid_argument if error does not represent a failure.
      */
-    [[nodiscard]] static Error validate_error(Error &&error)
+    static Error validate_error(Error &&error)
     {
       if (!error.has_error())
       {
         throw std::invalid_argument(
             "Result<T> cannot contain a success Error.");
       }
+
       return std::move(error);
     }
 
   private:
+    /**
+     * @brief Internal storage for either the success value or the error.
+     */
     std::variant<T, Error> storage_;
   };
 

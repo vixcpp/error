@@ -1,11 +1,11 @@
 /**
  *
- *  @file error/error.hpp
+ *  @file all.hpp
  *  @author Gaspard Kirira
  *
- *  @brief Internal aggregation header for the Vix error module.
+ *  @brief Aggregation header for the Vix error module.
  *
- *  This file includes all core components of the Vix error system.
+ *  This file includes all public core components of the Vix error system.
  *
  *  For most use cases, prefer:
  *    #include <vix/error.hpp>
@@ -19,8 +19,8 @@
  *
  *  Vix.cpp
  */
-#ifndef VIX_ERROR_ERROR_HPP
-#define VIX_ERROR_ERROR_HPP
+#ifndef VIX_ERROR_ALL_HPP
+#define VIX_ERROR_ALL_HPP
 
 #include <vix/error/Error.hpp>
 #include <vix/error/ErrorCategory.hpp>
@@ -28,4 +28,4 @@
 #include <vix/error/Exception.hpp>
 #include <vix/error/Result.hpp>
 
-#endif // VIX_ERROR_ERROR_HPP
+#endif // VIX_ERROR_ALL_HPP
