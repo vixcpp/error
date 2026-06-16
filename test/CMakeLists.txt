@@ -9,4 +9,17 @@ target_link_libraries(vix_error_test
     vix::error
 )
 
+if (VIX_ENABLE_SANITIZERS AND NOT MSVC)
+  target_compile_options(vix_error_test
+    PRIVATE
+      -fno-omit-frame-pointer
+      -fsanitize=address,undefined
+  )
+
+  target_link_options(vix_error_test
+    PRIVATE
+      -fsanitize=address,undefined
+  )
+endif()
+
 add_test(NAME vix_error_test COMMAND vix_error_test)
