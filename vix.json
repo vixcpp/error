@@ -1,0 +1,46 @@
+{
+  "namespace": "vix",
+  "name": "error",
+  "displayName": "Vix Error",
+  "version": "0.3.1",
+  "type": "library",
+  "license": "MIT",
+  "description": "Unified explicit error handling primitives for Vix C++ projects.",
+  "repository": "https://github.com/vixcpp/error.git",
+  "documentation": "https://github.com/vixcpp/error#readme",
+  "include": "include",
+  "standard": "c++20",
+  "keywords": [
+    "vix",
+    "cpp",
+    "error",
+    "result",
+    "diagnostics"
+  ],
+  "authors": [
+    {
+      "name": "Gaspard Kirira"
+    }
+  ],
+  "maintainers": [
+    {
+      "name": "Gaspard Kirira"
+    }
+  ],
+  "exports": {
+    "modules": [
+      "vix::error"
+    ],
+    "namespaces": [
+      "vix"
+    ]
+  },
+  "constraints": {
+    "platforms": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  },
+  "deps": []
+}
