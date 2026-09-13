@@ -115,6 +115,10 @@ else()
   add_library(vix_error INTERFACE)
   add_library(vix::error ALIAS vix_error)
 
+  set_target_properties(vix_error PROPERTIES
+    EXPORT_NAME error
+  )
+
   target_compile_features(vix_error INTERFACE cxx_std_20)
 
   target_include_directories(vix_error INTERFACE
