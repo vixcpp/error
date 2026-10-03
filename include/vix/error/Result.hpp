@@ -29,7 +29,9 @@ namespace vix::error
    * @class Result
    * @brief Represents either a success value of type T or an Error.
    *
-   * Result<T> is the preferred explicit error-handling abstraction in Vix.
+   * Result<T> is the canonical Vix3 explicit error-handling abstraction.
+   * New Vix3 APIs use this Result<T> with vix::error::Error rather than
+   * historical Vix2 compatibility result types.
    * It allows APIs to return either:
    * - a success value of type T
    * - a failure represented by vix::error::Error
