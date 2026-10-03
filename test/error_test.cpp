@@ -16,6 +16,9 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <type_traits>
+#include <utility>
+#include <variant>
 
 #include <vix/error/Error.hpp>
 #include <vix/error/ErrorCategory.hpp>
@@ -158,6 +161,113 @@ namespace
                 "Stored error message should match.");
   }
 
+  void test_result_rejects_success_error()
+  {
+    bool rejected = false;
+    try
+    {
+      [[maybe_unused]] vix::error::Result<int> result(vix::error::Error{});
+    }
+    catch (const std::invalid_argument &)
+    {
+      rejected = true;
+    }
+
+    assert_true(rejected,
+                "Result<int> should reject an Error that represents success.");
+  }
+
+  void test_result_invalid_access()
+  {
+    vix::error::Result<int> success(42);
+    bool value_error_threw = false;
+    try
+    {
+      [[maybe_unused]] const auto &error = success.error();
+    }
+    catch (const std::bad_variant_access &)
+    {
+      value_error_threw = true;
+    }
+    assert_true(value_error_threw,
+                "error() on a successful Result should throw bad_variant_access.");
+
+    vix::error::Result<int> failure(vix::error::Error(
+        vix::error::ErrorCode::InvalidArgument,
+        vix::error::ErrorCategory::validation(),
+        "invalid value"));
+    bool error_value_threw = false;
+    try
+    {
+      [[maybe_unused]] const auto &value = failure.value();
+    }
+    catch (const std::bad_variant_access &)
+    {
+      error_value_threw = true;
+    }
+    assert_true(error_value_threw,
+                "value() on a failed Result should throw bad_variant_access.");
+  }
+
+  void test_result_rvalue_access()
+  {
+    vix::error::Result<std::string> success(std::string("moved value"));
+    const auto value = std::move(success).value();
+    assert_true(value == "moved value",
+                "rvalue value() should move the stored value out.");
+
+    vix::error::Result<int> failure(vix::error::Error(
+        vix::error::ErrorCode::IoError,
+        vix::error::ErrorCategory::io(),
+        "moved error"));
+    const auto error = std::move(failure).error();
+    assert_true(error.message() == "moved error",
+                "rvalue error() should move the stored error out.");
+  }
+
+  void test_result_map_and_then()
+  {
+    using vix::error::Error;
+    using vix::error::ErrorCategory;
+    using vix::error::ErrorCode;
+    using vix::error::Result;
+
+    const Result<int> success(21);
+    const auto mapped = success.map([](int value) { return value * 2; });
+    assert_true(mapped.ok() && mapped.value() == 42,
+                "map should transform a successful value.");
+
+    const Result<int> failed(Error(
+        ErrorCode::InvalidArgument,
+        ErrorCategory::validation(),
+        "invalid input"));
+    const auto mapped_failure = failed.map([](int value) { return value * 2; });
+    assert_true(mapped_failure.has_error() &&
+                    mapped_failure.error().message() == "invalid input",
+                "map should propagate a failure unchanged.");
+
+    const auto chained = success.and_then([](int value) {
+      return Result<std::string>(std::to_string(value));
+    });
+    assert_true(chained.ok() && chained.value() == "21",
+                "and_then should return the operation result for success.");
+
+    const auto chained_failure = failed.and_then([](int value) {
+      return Result<std::string>(std::to_string(value));
+    });
+    assert_true(chained_failure.has_error() &&
+                    chained_failure.error().message() == "invalid input",
+                "and_then should propagate a failure unchanged.");
+  }
+
+  void test_result_supported_type_contract()
+  {
+    static_assert(std::is_same_v<vix::error::Result<int>::value_type, int>);
+    static_assert(std::is_same_v<vix::error::Result<int>::error_type,
+                                 vix::error::Error>);
+    static_assert(!std::is_default_constructible_v<vix::error::Result<int>>);
+  }
+
   void test_exception_wraps_error()
   {
     using vix::error::Error;
@@ -191,6 +301,11 @@ int main()
   test_error_equality();
   test_result_success();
   test_result_failure();
+  test_result_rejects_success_error();
+  test_result_invalid_access();
+  test_result_rvalue_access();
+  test_result_map_and_then();
+  test_result_supported_type_contract();
   test_exception_wraps_error();
 
   std::cout << "[PASS] vix_error_test\n";
